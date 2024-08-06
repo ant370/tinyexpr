@@ -59,6 +59,7 @@ enum {
     TOK_OPEN, TOK_CLOSE, TOK_NUMBER, TOK_VARIABLE, TOK_INFIX
 };
 
+int te_default_base = 16;  // Default to Hex 
 
 enum {TE_CONSTANT = 1};
 
@@ -100,6 +101,12 @@ static te_expr *new_expr(const int type, const te_expr *parameters[]) {
     return ret;
 }
 
+
+void te_set_default_base(int base) {
+    if (base == 16)  te_default_base = base;
+    if (base == 10)  te_default_base = base;
+
+}
 
 void te_free_parameters(te_expr *n) {
     if (!n) return;
@@ -213,6 +220,30 @@ static const te_variable *find_builtin(const char *name, int len) {
     return 0;
 }
 
+/** Transforms Variable into a hex output
+    @return 
+*/
+static const long find_hex(const state *s, const char *name, int len) {
+    
+    // Print with 0x
+    int hex_len = sizeof(char) * (strlen(name) + 2);
+    char * buffer = malloc(sizeof(char) * (hex_len) );
+    char * end_ptr = NULL;
+
+    memset(buffer, 0,hex_len );
+    sprintf(buffer, "0x%s", name);
+
+    long n = strtol(buffer, &end_ptr, 16);
+
+    free(buffer); // Cleanup 
+
+    if (buffer == end_ptr) {
+        return 0;
+    } else {
+        return n;
+    } 
+}
+
 static const te_variable *find_lookup(const state *s, const char *name, int len) {
     int iters;
     const te_variable *var;
@@ -223,7 +254,8 @@ static const te_variable *find_lookup(const state *s, const char *name, int len)
             return var;
         }
     }
-    return 0;
+ 
+    return NULL;
 }
 
 
@@ -258,9 +290,14 @@ void next_token(state *s) {
                 while (isalpha(s->next[0]) || isdigit(s->next[0]) || (s->next[0] == '_')) s->next++;
                 
                 const te_variable *var = find_lookup(s, start, s->next - start);
+ 
                 if (!var) var = find_builtin(start, s->next - start);
-
-                if (!var) {
+                //  Check if it's a hex constant 
+                if (!var && te_default_base == 16) {
+                    long val = find_hex(s, start, s->next - start);
+                    s->value = val;
+                    s->type = TOK_NUMBER;
+                } else if (!var) {
                     s->type = TOK_ERROR;
                 } else {
                     switch(TYPE_MASK(var->type))

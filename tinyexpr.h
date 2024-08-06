@@ -79,6 +79,10 @@ void te_print(const te_expr *n);
 /* This is safe to call on NULL pointers. */
 void te_free(te_expr *n);
 
+/* Sets the default base for constants. */
+/* 16 or 10 only valid arguments */
+void te_set_default_base(int base);
+
 
 #ifdef __cplusplus
 }
