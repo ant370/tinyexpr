@@ -57,6 +57,7 @@ typedef struct te_variable {
     const void *address;
     int type;
     void *context;
+    long unsigned int data;
 } te_variable;
 
 

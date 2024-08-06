@@ -223,25 +223,28 @@ static const te_variable *find_builtin(const char *name, int len) {
 /** Transforms Variable into a hex output
     @return 
 */
-static const long find_hex(const state *s, const char *name, int len) {
+static const long find_hex(const state *s, const char *name, int len, int *failed) {
     
     // Print with 0x
-    int hex_len = sizeof(char) * (strlen(name) + 2);
+    int hex_len = sizeof(char) * (len + 1);
     char * buffer = malloc(sizeof(char) * (hex_len) );
     char * end_ptr = NULL;
 
-    memset(buffer, 0,hex_len );
-    sprintf(buffer, "0x%s", name);
+    memset(buffer, 0,hex_len + 1); 
+    strncpy(buffer, name, len);
+    buffer[hex_len] = '\0';
+
 
     long n = strtol(buffer, &end_ptr, 16);
 
-    free(buffer); // Cleanup 
 
-    if (buffer == end_ptr) {
-        return 0;
-    } else {
-        return n;
-    } 
+    if (buffer == end_ptr) // Set failure flag
+        *failed = 1; 
+    if (end_ptr != buffer + len)
+        *failed = 1;
+
+    free(buffer); // Cleanup 
+    return n;
 }
 
 static const te_variable *find_lookup(const state *s, const char *name, int len) {
@@ -278,13 +281,18 @@ void next_token(state *s) {
             return;
         }
 
-        /* Try reading a number. */
-        if ((s->next[0] >= '0' && s->next[0] <= '9') || s->next[0] == '.') {
+        /* Try reading a number if default base is 10 */
+        if ( te_default_base == 10 &&  ((s->next[0] >= '0' && s->next[0] <= '9') || s->next[0] == '.')) {
             s->value = strtod(s->next, (char**)&s->next);
             s->type = TOK_NUMBER;
         } else {
-            /* Look for a variable or builtin function call. */
-            if (isalpha(s->next[0])) {
+            /* Else if it's alpha numeric 
+                look for: 
+                    - variable
+                    - builtin
+                    - hex number 
+            */
+            if (isalpha(s->next[0]) || (s->next[0] >= '0' && s->next[0] <= '9')) {
                 const char *start;
                 start = s->next;
                 while (isalpha(s->next[0]) || isdigit(s->next[0]) || (s->next[0] == '_')) s->next++;
@@ -294,9 +302,16 @@ void next_token(state *s) {
                 if (!var) var = find_builtin(start, s->next - start);
                 //  Check if it's a hex constant 
                 if (!var && te_default_base == 16) {
-                    long val = find_hex(s, start, s->next - start);
-                    s->value = val;
-                    s->type = TOK_NUMBER;
+                    int failed = 0;
+                    long val = find_hex(s, start, s->next - start, &failed);
+
+                    if (failed) {
+                        s->type = TOK_ERROR;
+                    } else { 
+                        s->value = val;
+                        s->type = TOK_NUMBER;
+                    }
+
                 } else if (!var) {
                     s->type = TOK_ERROR;
                 } else {
